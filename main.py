@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-# Telegram-бот для выкупа техники Apple
-# Работает через Webhook (Render/Railway)
-# Требования: Python 3.8+, pyTelegramBotAPI, Flask
+# Telegram-бот для выкупа б/у техники Apple
+# Python 3.8+, pyTelegramBotAPI
 # Установка: pip install pyTelegramBotAPI Flask
 
 import os
@@ -13,9 +12,8 @@ from flask import Flask, request
 # ======================== НАСТРОЙКИ ========================
 TOKEN = os.getenv("TG_TOKEN", "7618321225:AAGSxJVnjX1snonDMQNeK3lPJsB1AI5q9gg")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "119780466"))
-WEBHOOK_HOST = os.getenv("WEBHOOK_URL", "")  # https://your-app.onrender.com
+WEBHOOK_HOST = os.getenv("WEBHOOK_URL", "")
 BOT_NAME = "Apple Buyout Bot"
-PORT = int(os.getenv("PORT", 5000))
 # ===========================================================
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
@@ -25,17 +23,19 @@ app = Flask(__name__)
 DEVICE_TYPES = [
     "📱 iPhone", "💻 Mac", "📲 iPad",
     "⌚ Apple Watch", "🎧 AirPods", "🕶️ Vision Pro",
-    "🔌Аксессуары", "📦 Другая техника"
+    "🔌Аксессуары", "📦 Другая техника",
 ]
 
 CONDITIONS = [
     "✨ Новый", "💎 Идеальное (без царапин)",
     "🙂 Хорошее (есть незначительные следы использования)",
-    "😕 Есть царапины/сколы", "💥 Есть повреждения/битые элементы корпуса"
+    "😕 Есть царапины/сколы", "💥 Есть повреждения или битые элементы корпуса",
 ]
 
 CONTACT_METHODS = [
-    "Поделиться номером ☎️", "WhatsApp 📲", "Telegram @username"
+    "Поделиться номером ☎️",
+    "WhatsApp 📲",
+    "Telegram @username"
 ]
 
 BTN_SKIP = "Пропустить ⏭️"
@@ -44,15 +44,9 @@ BTN_CANCEL = "Отмена ❌"
 MAX_PHOTOS = 3
 
 STATES = {
-    "DEVICE": "DEVICE",
-    "CONDITION": "CONDITION",
-    "SPECS": "SPECS",
-    "KIT": "KIT",
-    "FAULTS": "FAULTS",
-    "PHOTOS": "PHOTOS",
-    "CONTACT_METHOD": "CONTACT_METHOD",
-    "CONTACT": "CONTACT",
-    "DONE": "DONE",
+    "DEVICE": "DEVICE", "CONDITION": "CONDITION", "SPECS": "SPECS",
+    "KIT": "KIT", "FAULTS": "FAULTS", "PHOTOS": "PHOTOS",
+    "CONTACT_METHOD": "CONTACT_METHOD", "CONTACT": "CONTACT", "DONE": "DONE",
 }
 
 users = {}
@@ -81,7 +75,8 @@ def reset_user(chat_id):
 def summary_text(chat_id):
     d = users[chat_id]
     photos_info = f"{len(d['photos'])} шт." if d["photos"] else "нет"
-    contact_info = d["contact"] or (f"{d['name'] or ''} {d['phone'] or ''}".strip() or f"@{d.get('username', '')}")
+    username_info = f"@{d['username']}" if d.get("username") else "—"
+    contact_block = d["contact"] or (f"{d['name'] or ''} {d['phone'] or ''}".strip() or username_info)
     text = (
         f"<b>📝 Новая заявка на выкуп</b>\n"
         f"────────────────────────\n"
@@ -91,7 +86,7 @@ def summary_text(chat_id):
         f"📚 <b>Комплект:</b>\n{d['kit'] or '—'}\n"
         f"⚠️ <b>Неисправности:</b>\n{d['faults'] or '—'}\n"
         f"🖼️ <b>Фото:</b> {photos_info}\n"
-        f"👤 <b>Контакты:</b>\n{contact_info}"
+        f"👤 <b>Контакты:</b>\n{contact_block}"
     )
     return text
 
@@ -113,7 +108,7 @@ def ask_condition(chat_id):
 def ask_specs(chat_id):
     bot.send_message(chat_id,
         "Опишите характеристики устройства, которые знаете. Менеджер уточнит детали при необходимости:\n"
-        "(год выпуска, память, аккумулятор (циклы и %), цвет и т.д.)",
+        "(год выпуска модели, память, аккумулятор (циклы и проценты), цвет и т.д.)",
         reply_markup=get_kb([BTN_SKIP], row_width=1))
     users[chat_id]["state"] = STATES["SPECS"]
 
@@ -143,24 +138,30 @@ def ask_contact_method(chat_id):
 
 def ask_contact(chat_id):
     method = users[chat_id]["contact_method"]
-    kb = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
     if method == "Поделиться номером ☎️":
+        kb = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
         kb.add(KeyboardButton("Поделиться номером ☎️", request_contact=True))
+        kb.add(KeyboardButton(BTN_SKIP), KeyboardButton(BTN_CANCEL))
+        bot.send_message(chat_id, "Пожалуйста, отправьте ваш номер через кнопку ниже:", reply_markup=kb)
+        users[chat_id]["state"] = STATES["CONTACT"]
     elif method == "WhatsApp 📲":
-        bot.send_message(chat_id, "Пожалуйста, отправьте номер для связи в WhatsApp (например: +79123456789)")
+        kb = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+        kb.add(KeyboardButton(BTN_SKIP), KeyboardButton(BTN_CANCEL))
+        bot.send_message(chat_id, "Пожалуйста, напишите ваш номер для связи через WhatsApp (например: +79123456789)",
+                         reply_markup=kb)
+        users[chat_id]["state"] = STATES["CONTACT"]
     elif method == "Telegram @username":
-        bot.send_message(chat_id, "Пожалуйста, укажите ваш Telegram @username")
-    kb.add(KeyboardButton(BTN_SKIP), KeyboardButton(BTN_CANCEL))
-    if method != "Поделиться номером ☎️":
-        users[chat_id]["state"] = STATES["CONTACT"]
-    else:
-        users[chat_id]["state"] = STATES["CONTACT"]
-        bot.send_message(chat_id, "Нажмите /start, если хотите начать заново", reply_markup=kb)
+        username = users[chat_id].get("username")
+        if username:
+            users[chat_id]["contact"] = f"https://t.me/{username} (Telegram)"
+            finish_and_send(chat_id)
+        else:
+            bot.send_message(chat_id, "Не удалось определить ваш username. Пожалуйста, выберите другой способ связи.")
+            ask_contact_method(chat_id)
 
 def finish_and_send(chat_id):
     text = summary_text(chat_id)
     bot.send_message(ADMIN_ID, text)
-
     photos = users[chat_id]["photos"]
     if photos:
         media = [InputMediaPhoto(pid) for pid in photos[:MAX_PHOTOS]]
@@ -169,8 +170,7 @@ def finish_and_send(chat_id):
         except:
             for pid in photos[:MAX_PHOTOS]:
                 bot.send_photo(ADMIN_ID, pid)
-
-    bot.send_message(chat_id, "Спасибо! 🎉 Ваша заявка отправлена менеджеру.",
+    bot.send_message(chat_id, "Спасибо! 🎉 Заявка отправлена менеджеру.",
                      reply_markup=ReplyKeyboardRemove())
     users[chat_id]["state"] = STATES["DONE"]
 
@@ -188,7 +188,7 @@ def cmd_start(message):
 def handle_contact(message):
     chat_id = message.chat.id
     if chat_id not in users: reset_user(chat_id)
-    if users[chat_id].get("state") != STATES["CONTACT"]:
+    if users[chat_id].get("state") != STATES["CONTACT"]: 
         bot.send_message(chat_id, "Нажмите /start, чтобы начать заново."); return
     c = message.contact
     users[chat_id]["name"] = f"{c.first_name or ''} {c.last_name or ''}".strip()
@@ -201,7 +201,8 @@ def handle_photo(message):
     chat_id = message.chat.id
     users.setdefault(chat_id, {"photos": []})
     if users[chat_id].get("state") != STATES["PHOTOS"]:
-        bot.send_message(chat_id, "Фото принято, но анкета не запущена. Нажмите /start."); return
+        bot.send_message(chat_id, "Фото сохранено, но анкета не запущена. Нажмите /start.")
+        return
     fid = message.photo[-1].file_id
     if len(users[chat_id]["photos"]) < MAX_PHOTOS:
         users[chat_id]["photos"].append(fid)
@@ -216,47 +217,64 @@ def handle_text(message):
     if chat_id not in users: reset_user(chat_id)
 
     if text == BTN_CANCEL or text.lower() in ("/cancel", "cancel"):
-        bot.send_message(chat_id, "Действие отменено. Нажмите /start для нового начала.",
-                         reply_markup=ReplyKeyboardRemove()); reset_user(chat_id); return
+        bot.send_message(chat_id, "Окей, отменил. Нажмите /start, чтобы начать заново.",
+                         reply_markup=ReplyKeyboardRemove())
+        reset_user(chat_id)
+        return
 
     state = users[chat_id].get("state")
 
-    # =================== ЛОГИКА ПО ШАГАМ ===================
+    # ======= Логика шагов =======
     if state == STATES["DEVICE"]:
-        if text in DEVICE_TYPES: users[chat_id]["device"] = text; ask_condition(chat_id)
-        else: ask_device(chat_id); return
+        if text in DEVICE_TYPES:
+            users[chat_id]["device"] = text
+            ask_condition(chat_id)
+        else: ask_device(chat_id)
 
     elif state == STATES["CONDITION"]:
-        users[chat_id]["condition"] = None if text == BTN_SKIP else text; ask_specs(chat_id)
+        users[chat_id]["condition"] = None if text == BTN_SKIP else text
+        ask_specs(chat_id)
 
     elif state == STATES["SPECS"]:
-        users[chat_id]["specs"] = None if text == BTN_SKIP else text; ask_kit(chat_id)
+        users[chat_id]["specs"] = None if text == BTN_SKIP else text
+        ask_kit(chat_id)
 
     elif state == STATES["KIT"]:
-        users[chat_id]["kit"] = None if text == BTN_SKIP else text; ask_faults(chat_id)
+        users[chat_id]["kit"] = None if text == BTN_SKIP else text
+        ask_faults(chat_id)
 
     elif state == STATES["FAULTS"]:
-        users[chat_id]["faults"] = None if text == BTN_SKIP else text; ask_photos(chat_id)
+        users[chat_id]["faults"] = None if text == BTN_SKIP else text
+        ask_photos(chat_id)
 
     elif state == STATES["PHOTOS"]:
-        if text in (BTN_DONE, BTN_SKIP): ask_contact_method(chat_id)
-        else: bot.send_message(chat_id, "Прикрепите фото или нажмите «Готово» / «Пропустить».")
+        if text in (BTN_DONE, BTN_SKIP):
+            ask_contact_method(chat_id)
+        else:
+            bot.send_message(chat_id, f"Прикрепите фото или нажмите «{BTN_DONE}» / «{BTN_SKIP}».")
 
     elif state == STATES["CONTACT_METHOD"]:
         if text in CONTACT_METHODS:
             users[chat_id]["contact_method"] = text
             ask_contact(chat_id)
         elif text == BTN_SKIP:
-            users[chat_id]["contact_method"] = None
             finish_and_send(chat_id)
+        else:
+            ask_contact_method(chat_id)
 
     elif state == STATES["CONTACT"]:
-        users[chat_id]["contact"] = text if text != BTN_SKIP else None
-        finish_and_send(chat_id)
-
+        method = users[chat_id]["contact_method"]
+        if method == "WhatsApp 📲":
+            users[chat_id]["contact"] = f"{text} (WhatsApp)"
+            finish_and_send(chat_id)
+        elif method == "Поделиться номером ☎️":
+            users[chat_id]["contact"] = text
+            finish_and_send(chat_id)
+        else:
+            finish_and_send(chat_id)
     else:
-        bot.send_message(chat_id, "Давайте начнем заново. Нажмите /start.",
-                         reply_markup=ReplyKeyboardRemove()); reset_user(chat_id)
+        bot.send_message(chat_id, "Давайте начнём заново. Нажмите /start.", reply_markup=ReplyKeyboardRemove())
+        reset_user(chat_id)
 
 # ======================== WEBHOOK ========================
 
@@ -272,8 +290,8 @@ def index():
 
 if __name__ == "__main__":
     if not WEBHOOK_HOST:
-        raise RuntimeError("❌ Укажите переменную окружения WEBHOOK_URL!")
+        raise RuntimeError("❌ Укажи переменную окружения WEBHOOK_URL (адрес Render/Railway)!")
     WEBHOOK_URL = f"{WEBHOOK_HOST}/{TOKEN}"
     bot.remove_webhook()
     bot.set_webhook(url=WEBHOOK_URL)
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
