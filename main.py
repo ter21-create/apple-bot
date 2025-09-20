@@ -10,7 +10,7 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 from flask import Flask, request
 
 # ======================== НАСТРОЙКИ ========================
-TOKEN = os.getenv("TG_TOKEN", "7618321225:AAGSxJVnjX1snonDMQNeK3lPJsB1AI5q9gg")
+TOKEN = os.getenv("TG_TOKEN", "7618321225:AAHDqYb6Kinrqwqi7Vg_ljY-RnihkoTqQl4")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "119780466"))
 WEBHOOK_HOST = os.getenv("WEBHOOK_URL", "")
 BOT_NAME = "Apple Buyout Bot"
